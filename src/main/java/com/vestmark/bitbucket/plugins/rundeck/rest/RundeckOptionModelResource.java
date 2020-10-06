@@ -2,6 +2,7 @@ package com.vestmark.bitbucket.plugins.rundeck.rest;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -9,6 +10,7 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
@@ -27,6 +29,7 @@ import com.atlassian.bitbucket.util.PageRequest;
 import com.atlassian.bitbucket.util.PageRequestImpl;
 import com.atlassian.plugin.spring.scanner.annotation.imports.ComponentImport;
 import com.atlassian.plugins.rest.common.security.AnonymousAllowed;
+import org.apache.commons.lang3.StringUtils;
 
 @PublicApi
 @AnonymousAllowed
@@ -55,7 +58,7 @@ public class RundeckOptionModelResource
   @Path("projects")
   @AnonymousAllowed
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getProjects()
+  public Response getProjects(@QueryParam("selected") String selected)
   {
     PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
     Page<Project> projects = projectService.findAll(pageRequest);
@@ -63,6 +66,7 @@ public class RundeckOptionModelResource
         .map(RundeckOptionModelMapper::map)
         .sorted()
         .collect(Collectors.toList());
+    toggleSelected(entries, selected);
     return Response.ok(entries).build();
   }
 
@@ -70,13 +74,16 @@ public class RundeckOptionModelResource
   @AnonymousAllowed
   @Path("projects/{projectKey}/repos")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getRepositoriesByProject(@PathParam("projectKey") String projectKey)
+  public Response getRepositoriesByProject(@PathParam("projectKey") String projectKey,
+                                           @QueryParam("selected") String selected)
   {
     PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
     Page<Repository> repositories = repositoryService.findByProjectKey(projectKey, pageRequest);
     List<RundeckOptionModelEntry> entries = StreamSupport.stream(repositories.getValues().spliterator(), false)
         .map(RundeckOptionModelMapper::map)
+        .sorted()
         .collect(Collectors.toList());
+    toggleSelected(entries, selected);
     return Response.ok(entries).build();
   }
 
@@ -84,7 +91,8 @@ public class RundeckOptionModelResource
   @AnonymousAllowed
   @Path("projects/{projectKey}/repos/{repoSlug}/refs")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getRefs(@PathParam("projectKey") String projectKey, @PathParam("repoSlug") String repoSlug)
+  public Response getRefs(@PathParam("projectKey") String projectKey, @PathParam("repoSlug") String repoSlug,
+                          @QueryParam("selected") String selected)
   {
     Repository repository = repositoryService.getBySlug(projectKey, repoSlug);
     if (repository == null) {
@@ -103,6 +111,18 @@ public class RundeckOptionModelResource
             .map(RundeckOptionModelMapper::map)
             .collect(Collectors.toList()));
     Collections.sort(entries);
+    toggleSelected(entries, selected);
     return Response.ok(entries).build();
+  }
+
+  private void toggleSelected(List<RundeckOptionModelEntry> entries, String selected) {
+    if(StringUtils.isNotBlank(selected)) {
+      Pattern selectedPattern = Pattern.compile(selected, Pattern.CASE_INSENSITIVE);
+      entries.forEach(x -> {
+        if(selectedPattern.matcher(x.getName()).matches()){
+          x.setSelected(true);
+        }
+      });
+    }
   }
 }
