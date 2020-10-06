@@ -8,6 +8,7 @@ public class RundeckOptionModelEntry
 
   private String name;
   private String value;
+  private boolean selected = false;
 
   public RundeckOptionModelEntry()
   {
@@ -39,6 +40,17 @@ public class RundeckOptionModelEntry
   public void setValue(String value)
   {
     this.value = value;
+  }
+
+  @XmlElement
+  public boolean isSelected()
+  {
+    return selected;
+  }
+
+  public void setSelected(boolean selected)
+  {
+    this.selected = selected;
   }
 
   @Override
