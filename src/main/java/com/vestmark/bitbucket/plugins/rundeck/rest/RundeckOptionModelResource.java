@@ -44,6 +44,8 @@ public class RundeckOptionModelResource
   @ComponentImport
   private RefService refService;
 
+  private static final PageRequest ALL_PAGES = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
+
   public RundeckOptionModelResource(
       ProjectService projectService,
       RepositoryService repositoryService,
@@ -60,8 +62,7 @@ public class RundeckOptionModelResource
   @Produces(MediaType.APPLICATION_JSON)
   public Response getProjects(@QueryParam("selected") String selected)
   {
-    PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
-    Page<Project> projects = projectService.findAll(pageRequest);
+    Page<Project> projects = projectService.findAll(ALL_PAGES);
     List<RundeckOptionModelEntry> entries = StreamSupport.stream(projects.getValues().spliterator(), false)
         .map(RundeckOptionModelMapper::map)
         .sorted()
@@ -77,8 +78,10 @@ public class RundeckOptionModelResource
   public Response getRepositoriesByProject(@PathParam("projectKey") String projectKey,
                                            @QueryParam("selected") String selected)
   {
-    PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
-    Page<Repository> repositories = repositoryService.findByProjectKey(projectKey, pageRequest);
+    if (StringUtils.isBlank(projectKey)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("projectKey is required").build();
+    }
+    Page<Repository> repositories = repositoryService.findByProjectKey(projectKey, ALL_PAGES);
     List<RundeckOptionModelEntry> entries = StreamSupport.stream(repositories.getValues().spliterator(), false)
         .map(RundeckOptionModelMapper::map)
         .sorted()
@@ -94,15 +97,20 @@ public class RundeckOptionModelResource
   public Response getRefs(@PathParam("projectKey") String projectKey, @PathParam("repoSlug") String repoSlug,
                           @QueryParam("selected") String selected)
   {
+    if (StringUtils.isBlank(projectKey)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("projectKey is required").build();
+    }
+    if (StringUtils.isBlank(repoSlug)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("repoSlug is required").build();
+    }
     Repository repository = repositoryService.getBySlug(projectKey, repoSlug);
     if (repository == null) {
-      return Response.noContent().build();
+      return Response.status(Response.Status.NOT_FOUND).entity("Repository not found").build();
     }
     RepositoryBranchesRequest branchesRequest = new RepositoryBranchesRequest.Builder(repository).build();
-    PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
-    Page<Branch> branches = refService.getBranches(branchesRequest, pageRequest);
+    Page<Branch> branches = refService.getBranches(branchesRequest, ALL_PAGES);
     RepositoryTagsRequest tagsRequest = new RepositoryTagsRequest.Builder(repository).build();
-    Page<Tag> tags = refService.getTags(tagsRequest, pageRequest);
+    Page<Tag> tags = refService.getTags(tagsRequest, ALL_PAGES);
     List<RundeckOptionModelEntry> entries = StreamSupport.stream(branches.getValues().spliterator(), false)
         .map(RundeckOptionModelMapper::map)
         .collect(Collectors.toList());
