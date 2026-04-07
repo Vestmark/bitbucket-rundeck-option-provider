@@ -13,6 +13,8 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.DefaultValue;
+import java.util.ArrayList;
 
 import com.atlassian.annotations.PublicApi;
 import com.atlassian.bitbucket.project.Project;
@@ -91,25 +93,60 @@ public class RundeckOptionModelResource
   @AnonymousAllowed
   @Path("projects/{projectKey}/repos/{repoSlug}/refs")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getRefs(@PathParam("projectKey") String projectKey, @PathParam("repoSlug") String repoSlug,
-                          @QueryParam("selected") String selected)
+  public Response getRefs(
+    @PathParam("projectKey") String projectKey,
+    @PathParam("repoSlug") String repoSlug,
+    @QueryParam("selected") String selected,
+
+    @QueryParam("filter")
+    String filter,
+
+    @QueryParam("branches")
+    @DefaultValue("true")
+    boolean includeBranches,
+
+    @QueryParam("tags")
+    @DefaultValue("true")
+    boolean includeTags)
+
+  //public Response getRefs(@PathParam("projectKey") String projectKey, @PathParam("repoSlug") String repoSlug,
+  //                        @QueryParam("selected") String selected)
   {
     Repository repository = repositoryService.getBySlug(projectKey, repoSlug);
     if (repository == null) {
       return Response.noContent().build();
     }
-    RepositoryBranchesRequest branchesRequest = new RepositoryBranchesRequest.Builder(repository).build();
     PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
-    Page<Branch> branches = refService.getBranches(branchesRequest, pageRequest);
-    RepositoryTagsRequest tagsRequest = new RepositoryTagsRequest.Builder(repository).build();
-    Page<Tag> tags = refService.getTags(tagsRequest, pageRequest);
-    List<RundeckOptionModelEntry> entries = StreamSupport.stream(branches.getValues().spliterator(), false)
-        .map(RundeckOptionModelMapper::map)
-        .collect(Collectors.toList());
-    entries.addAll(
-        StreamSupport.stream(tags.getValues().spliterator(), false)
-            .map(RundeckOptionModelMapper::map)
-            .collect(Collectors.toList()));
+    List<RundeckOptionModelEntry> entries = new ArrayList<>();
+    
+    if (StringUtils.isNotBlank(filter)) {
+        Pattern filterPattern = Pattern.compile(filter, Pattern.CASE_INSENSITIVE);
+        entries = entries.stream()
+            .filter(x -> x.getName() != null && filterPattern.matcher(x.getName()).matches())
+            .collect(Collectors.toList());
+    }
+
+    if (includeBranches) {
+        RepositoryBranchesRequest branchesRequest =
+            new RepositoryBranchesRequest.Builder(repository).build();
+        Page<Branch> branchPage = refService.getBranches(branchesRequest, pageRequest);
+
+        entries.addAll(
+            StreamSupport.stream(branchPage.getValues().spliterator(), false)
+                .map(RundeckOptionModelMapper::map)
+                .collect(Collectors.toList()));
+    }
+
+    if (includeTags) {
+        RepositoryTagsRequest tagsRequest =
+            new RepositoryTagsRequest.Builder(repository).build();
+        Page<Tag> tagPage = refService.getTags(tagsRequest, pageRequest);
+
+        entries.addAll(
+            StreamSupport.stream(tagPage.getValues().spliterator(), false)
+                .map(RundeckOptionModelMapper::map)
+                .collect(Collectors.toList()));
+    }
     Collections.sort(entries);
     toggleSelected(entries, selected);
     return Response.ok(entries).build();
