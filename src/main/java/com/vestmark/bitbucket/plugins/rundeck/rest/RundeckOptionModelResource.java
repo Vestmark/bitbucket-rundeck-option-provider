@@ -118,14 +118,7 @@ public class RundeckOptionModelResource
     }
     PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
     List<RundeckOptionModelEntry> entries = new ArrayList<>();
-    
-    if (StringUtils.isNotBlank(filter)) {
-        Pattern filterPattern = Pattern.compile(filter, Pattern.CASE_INSENSITIVE);
-        entries = entries.stream()
-            .filter(x -> x.getName() != null && filterPattern.matcher(x.getName()).matches())
-            .collect(Collectors.toList());
-    }
-
+  
     if (includeBranches) {
         RepositoryBranchesRequest branchesRequest =
             new RepositoryBranchesRequest.Builder(repository).build();
@@ -147,6 +140,14 @@ public class RundeckOptionModelResource
                 .map(RundeckOptionModelMapper::map)
                 .collect(Collectors.toList()));
     }
+    
+    if (StringUtils.isNotBlank(filter)) {
+        Pattern filterPattern = Pattern.compile(filter, Pattern.CASE_INSENSITIVE);
+        entries = entries.stream()
+            .filter(x -> x.getName() != null && filterPattern.matcher(x.getName()).matches())
+            .collect(Collectors.toList());
+    }
+    
     Collections.sort(entries);
     toggleSelected(entries, selected);
     return Response.ok(entries).build();
