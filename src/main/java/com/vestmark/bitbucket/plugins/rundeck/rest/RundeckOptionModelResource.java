@@ -1,11 +1,14 @@
 package com.vestmark.bitbucket.plugins.rundeck.rest;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -13,8 +16,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.DefaultValue;
-import java.util.ArrayList;
 
 import com.atlassian.annotations.PublicApi;
 import com.atlassian.bitbucket.project.Project;
@@ -32,25 +33,29 @@ import com.atlassian.bitbucket.util.PageRequestImpl;
 import com.atlassian.plugin.spring.scanner.annotation.imports.ComponentImport;
 import com.atlassian.plugins.rest.common.security.AnonymousAllowed;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @PublicApi
 @AnonymousAllowed
 @Path("options-provider")
-public class RundeckOptionModelResource
-{
+public class RundeckOptionModelResource {
+
+  private static final Logger log = LoggerFactory.getLogger(RundeckOptionModelResource.class);
 
   @ComponentImport
-  private ProjectService projectService;
+  private final ProjectService projectService;
+
   @ComponentImport
-  private RepositoryService repositoryService;
+  private final RepositoryService repositoryService;
+
   @ComponentImport
-  private RefService refService;
+  private final RefService refService;
 
   public RundeckOptionModelResource(
       ProjectService projectService,
       RepositoryService repositoryService,
-      RefService refService)
-  {
+      RefService refService) {
     this.projectService = projectService;
     this.repositoryService = repositoryService;
     this.refService = refService;
@@ -60,14 +65,16 @@ public class RundeckOptionModelResource
   @Path("projects")
   @AnonymousAllowed
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getProjects(@QueryParam("selected") String selected)
-  {
+  public Response getProjects(@QueryParam("selected") String selected) {
     PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
     Page<Project> projects = projectService.findAll(pageRequest);
-    List<RundeckOptionModelEntry> entries = StreamSupport.stream(projects.getValues().spliterator(), false)
-        .map(RundeckOptionModelMapper::map)
-        .sorted()
-        .collect(Collectors.toList());
+
+    List<RundeckOptionModelEntry> entries =
+        StreamSupport.stream(projects.getValues().spliterator(), false)
+            .map(RundeckOptionModelMapper::map)
+            .sorted()
+            .collect(Collectors.toList());
+
     toggleSelected(entries, selected);
     return Response.ok(entries).build();
   }
@@ -76,15 +83,19 @@ public class RundeckOptionModelResource
   @AnonymousAllowed
   @Path("projects/{projectKey}/repos")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getRepositoriesByProject(@PathParam("projectKey") String projectKey,
-                                           @QueryParam("selected") String selected)
-  {
+  public Response getRepositoriesByProject(
+      @PathParam("projectKey") String projectKey,
+      @QueryParam("selected") String selected) {
+
     PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
     Page<Repository> repositories = repositoryService.findByProjectKey(projectKey, pageRequest);
-    List<RundeckOptionModelEntry> entries = StreamSupport.stream(repositories.getValues().spliterator(), false)
-        .map(RundeckOptionModelMapper::map)
-        .sorted()
-        .collect(Collectors.toList());
+
+    List<RundeckOptionModelEntry> entries =
+        StreamSupport.stream(repositories.getValues().spliterator(), false)
+            .map(RundeckOptionModelMapper::map)
+            .sorted()
+            .collect(Collectors.toList());
+
     toggleSelected(entries, selected);
     return Response.ok(entries).build();
   }
@@ -94,70 +105,99 @@ public class RundeckOptionModelResource
   @Path("projects/{projectKey}/repos/{repoSlug}/refs")
   @Produces(MediaType.APPLICATION_JSON)
   public Response getRefs(
-    @PathParam("projectKey") String projectKey,
-    @PathParam("repoSlug") String repoSlug,
-    @QueryParam("selected") String selected,
+      @PathParam("projectKey") String projectKey,
+      @PathParam("repoSlug") String repoSlug,
+      @QueryParam("selected") String selected,
+      @QueryParam("debug") @DefaultValue("true") boolean debug,
+      @QueryParam("filter") String filter,
+      @QueryParam("branches") @DefaultValue("true") boolean includeBranches,
+      @QueryParam("tags") @DefaultValue("true") boolean includeTags) {
+    
+    if (debug) {
+      log.debug(
+          "Request params -> projectKey={}, repoSlug={}, includeBranches={}, includeTags={}, filter={}, selected={}",
+          projectKey, repoSlug, includeBranches, includeTags, filter, selected);
+    }
 
-    @QueryParam("filter")
-    String filter,
-
-    @QueryParam("branches")
-    @DefaultValue("true")
-    boolean includeBranches,
-
-    @QueryParam("tags")
-    @DefaultValue("true")
-    boolean includeTags)
-
-  //public Response getRefs(@PathParam("projectKey") String projectKey, @PathParam("repoSlug") String repoSlug,
-  //                        @QueryParam("selected") String selected)
-  {
     Repository repository = repositoryService.getBySlug(projectKey, repoSlug);
     if (repository == null) {
       return Response.noContent().build();
     }
+
+    final Pattern filterPattern;
+    if (StringUtils.isNotBlank(filter)) {
+      try {
+        filterPattern = Pattern.compile(filter, Pattern.CASE_INSENSITIVE);
+      } catch (PatternSyntaxException e) {
+        log.warn("Invalid filter regex: {}", filter, e);
+        return Response.status(Response.Status.BAD_REQUEST)
+            .entity("Invalid filter regex: " + filter)
+            .build();
+      }
+    } else {
+      filterPattern = null;
+      if (debug) {
+        log.debug("No filter applied");
+      }
+    }
+
     PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
     List<RundeckOptionModelEntry> entries = new ArrayList<>();
-  
-    if (includeBranches) {
-        RepositoryBranchesRequest branchesRequest =
-            new RepositoryBranchesRequest.Builder(repository).build();
-        Page<Branch> branchPage = refService.getBranches(branchesRequest, pageRequest);
 
-        entries.addAll(
-            StreamSupport.stream(branchPage.getValues().spliterator(), false)
-                .map(RundeckOptionModelMapper::map)
-                .collect(Collectors.toList()));
+    if (includeBranches) {
+      Page<Branch> branchPage =
+          refService.getBranches(
+              new RepositoryBranchesRequest.Builder(repository).build(),
+              pageRequest);
+
+      List<RundeckOptionModelEntry> branchEntries =
+          StreamSupport.stream(branchPage.getValues().spliterator(), false)
+              .map(RundeckOptionModelMapper::map)
+              .filter(e -> e.getName() != null)
+              .filter(e -> filterPattern == null || filterPattern.matcher(e.getName()).matches())
+              .collect(Collectors.toList());
+
+      entries.addAll(branchEntries);
+
+      if (debug) {
+        log.debug("Branches after filtering: {}", branchEntries.size());
+      }
+    } else if (debug) {
+      log.debug("Branches excluded by request");
     }
 
     if (includeTags) {
-        RepositoryTagsRequest tagsRequest =
-            new RepositoryTagsRequest.Builder(repository).build();
-        Page<Tag> tagPage = refService.getTags(tagsRequest, pageRequest);
+      Page<Tag> tagPage =
+          refService.getTags(
+              new RepositoryTagsRequest.Builder(repository).build(),
+              pageRequest);
 
-        entries.addAll(
-            StreamSupport.stream(tagPage.getValues().spliterator(), false)
-                .map(RundeckOptionModelMapper::map)
-                .collect(Collectors.toList()));
+      List<RundeckOptionModelEntry> tagEntries =
+          StreamSupport.stream(tagPage.getValues().spliterator(), false)
+              .map(RundeckOptionModelMapper::map)
+              .filter(e -> e.getName() != null)
+              .filter(e -> filterPattern == null || filterPattern.matcher(e.getName()).matches())
+              .collect(Collectors.toList());
+
+      entries.addAll(tagEntries);
+
+      if (debug) {
+        log.debug("Tags after filtering: {}", tagEntries.size());
+      }
+    } else if (debug) {
+      log.debug("Tags excluded by request");
     }
-    
-    if (StringUtils.isNotBlank(filter)) {
-        Pattern filterPattern = Pattern.compile(filter, Pattern.CASE_INSENSITIVE);
-        entries = entries.stream()
-            .filter(x -> x.getName() != null && filterPattern.matcher(x.getName()).matches())
-            .collect(Collectors.toList());
-    }
-    
+
     Collections.sort(entries);
     toggleSelected(entries, selected);
     return Response.ok(entries).build();
   }
 
   private void toggleSelected(List<RundeckOptionModelEntry> entries, String selected) {
-    if(StringUtils.isNotBlank(selected)) {
+    if (StringUtils.isNotBlank(selected)) {
       Pattern selectedPattern = Pattern.compile(selected, Pattern.CASE_INSENSITIVE);
       entries.forEach(x -> {
-        if(selectedPattern.matcher(x.getName()).matches()){
+        if (x.getName() != null && selectedPattern.matcher(x.getName()).matches()) {
           x.setSelected(true);
         }
       });
