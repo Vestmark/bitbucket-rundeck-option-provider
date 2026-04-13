@@ -108,16 +108,9 @@ public class RundeckOptionModelResource {
       @PathParam("projectKey") String projectKey,
       @PathParam("repoSlug") String repoSlug,
       @QueryParam("selected") String selected,
-      @QueryParam("debug") @DefaultValue("true") boolean debug,
       @QueryParam("filter") String filter,
       @QueryParam("branches") @DefaultValue("true") boolean includeBranches,
       @QueryParam("tags") @DefaultValue("true") boolean includeTags) {
-    
-    if (debug) {
-      log.debug(
-          "Request params -> projectKey={}, repoSlug={}, includeBranches={}, includeTags={}, filter={}, selected={}",
-          projectKey, repoSlug, includeBranches, includeTags, filter, selected);
-    }
 
     Repository repository = repositoryService.getBySlug(projectKey, repoSlug);
     if (repository == null) {
@@ -136,9 +129,6 @@ public class RundeckOptionModelResource {
       }
     } else {
       filterPattern = null;
-      if (debug) {
-        log.debug("No filter applied");
-      }
     }
 
     PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
@@ -158,12 +148,6 @@ public class RundeckOptionModelResource {
               .collect(Collectors.toList());
 
       entries.addAll(branchEntries);
-
-      if (debug) {
-        log.debug("Branches after filtering: {}", branchEntries.size());
-      }
-    } else if (debug) {
-      log.debug("Branches excluded by request");
     }
 
     if (includeTags) {
@@ -180,12 +164,6 @@ public class RundeckOptionModelResource {
               .collect(Collectors.toList());
 
       entries.addAll(tagEntries);
-
-      if (debug) {
-        log.debug("Tags after filtering: {}", tagEntries.size());
-      }
-    } else if (debug) {
-      log.debug("Tags excluded by request");
     }
 
     Collections.sort(entries);
