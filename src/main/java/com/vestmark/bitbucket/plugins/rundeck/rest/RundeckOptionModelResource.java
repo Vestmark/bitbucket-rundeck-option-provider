@@ -109,8 +109,8 @@ public class RundeckOptionModelResource {
       @PathParam("repoSlug") String repoSlug,
       @QueryParam("selected") String selected,
       @QueryParam("filter") String filter,
-      @QueryParam("branches") @DefaultValue("true") boolean includeBranches,
-      @QueryParam("tags") @DefaultValue("true") boolean includeTags) {
+      @QueryParam("includeBranches") @DefaultValue("true") boolean includeBranches,
+      @QueryParam("includeTags") @DefaultValue("true") boolean includeTags) {
 
     Repository repository = repositoryService.getBySlug(projectKey, repoSlug);
     if (repository == null) {
