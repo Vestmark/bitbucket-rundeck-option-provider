@@ -117,20 +117,6 @@ public class RundeckOptionModelResource {
       return Response.noContent().build();
     }
 
-    final Pattern filterPattern;
-    if (StringUtils.isNotBlank(filter)) {
-      try {
-        filterPattern = Pattern.compile(filter, Pattern.CASE_INSENSITIVE);
-      } catch (PatternSyntaxException e) {
-        log.warn("Invalid filter regex: {}", filter, e);
-        return Response.status(Response.Status.BAD_REQUEST)
-            .entity("Invalid filter regex: " + filter)
-            .build();
-      }
-    } else {
-      filterPattern = null;
-    }
-
     PageRequest pageRequest = new PageRequestImpl(0, PageRequest.MAX_PAGE_LIMIT);
     List<RundeckOptionModelEntry> entries = new ArrayList<>();
 
@@ -144,7 +130,6 @@ public class RundeckOptionModelResource {
           StreamSupport.stream(branchPage.getValues().spliterator(), false)
               .map(RundeckOptionModelMapper::map)
               .filter(e -> e.getName() != null)
-              .filter(e -> filterPattern == null || filterPattern.matcher(e.getName()).matches())
               .collect(Collectors.toList());
 
       entries.addAll(branchEntries);
@@ -160,10 +145,25 @@ public class RundeckOptionModelResource {
           StreamSupport.stream(tagPage.getValues().spliterator(), false)
               .map(RundeckOptionModelMapper::map)
               .filter(e -> e.getName() != null)
-              .filter(e -> filterPattern == null || filterPattern.matcher(e.getName()).matches())
               .collect(Collectors.toList());
 
       entries.addAll(tagEntries);
+    }
+
+    if (StringUtils.isNotBlank(filter)) {
+      final Pattern filterPattern;
+      try {
+        filterPattern = Pattern.compile(filter, Pattern.CASE_INSENSITIVE);
+      } catch (PatternSyntaxException e) {
+        log.warn("Invalid filter regex: {}", filter, e);
+        return Response.status(Response.Status.BAD_REQUEST)
+            .entity("Invalid filter regex: " + filter)
+            .build();
+      }
+
+      entries = entries.stream()
+          .filter(e -> filterPattern.matcher(e.getName()).matches())
+          .collect(Collectors.toList());
     }
 
     Collections.sort(entries);
