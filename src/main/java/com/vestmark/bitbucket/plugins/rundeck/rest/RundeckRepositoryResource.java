@@ -11,6 +11,8 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.atlassian.annotations.PublicApi;
 import com.atlassian.bitbucket.repository.Repository;
 import com.atlassian.bitbucket.repository.RepositoryCloneLinksRequest;
@@ -42,9 +44,15 @@ public class RundeckRepositoryResource
       @PathParam("repoSlug") String repoSlug,
       @QueryParam("protocol") @DefaultValue("ssh") String protocol)
   {
+    if (StringUtils.isBlank(projectKey)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("projectKey is required").build();
+    }
+    if (StringUtils.isBlank(repoSlug)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("repoSlug is required").build();
+    }
     Repository repository = repositoryService.getBySlug(projectKey, repoSlug);
     if (repository == null) {
-      return Response.noContent().build();
+      return Response.status(Response.Status.NOT_FOUND).entity("Repository not found").build();
     }
     RepositoryCloneLinksRequest cloneLinksRequest = new RepositoryCloneLinksRequest.Builder().repository(repository)
         .protocol(protocol)

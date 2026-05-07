@@ -75,3 +75,7 @@ atlassian-ide-plugin.xml
 # Atlassian SDK
 com.*/
 target/
+
+# IDE / local build config
+.mvn/
+.vscode/

@@ -1,5 +1,7 @@
 package com.vestmark.bitbucket.plugins.rundeck.rest;
 
+import java.util.Objects;
+
 import javax.xml.bind.annotation.XmlElement;
 
 public class RundeckOptionModelEntry
@@ -66,5 +68,26 @@ public class RundeckOptionModelEntry
       return -1;
     }
     return name.compareTo(o.getName());
+  }
+
+  @Override
+  public boolean equals(Object obj)
+  {
+    if (this == obj) return true;
+    if (!(obj instanceof RundeckOptionModelEntry)) return false;
+    RundeckOptionModelEntry other = (RundeckOptionModelEntry) obj;
+    return Objects.equals(name, other.name) && Objects.equals(value, other.value);
+  }
+
+  @Override
+  public int hashCode()
+  {
+    return Objects.hash(name, value);
+  }
+
+  @Override
+  public String toString()
+  {
+    return "RundeckOptionModelEntry{name=" + name + ", value=" + value + ", selected=" + selected + "}";
   }
 }
